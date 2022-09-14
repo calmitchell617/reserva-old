@@ -1,0 +1,30 @@
+# This is *not* a production ready way to deploy Reserva.
+
+services:
+  cache:
+    image: redis:7
+    container_name: cache
+  db:
+    image: postgres:14
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    container_name: db
+    ports:
+      - 5432:5432
+  server:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    container_name: server
+    environment:
+      - DB_DSN=${DOCKER_DSN}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_SENDER=${SMTP_SENDER}
+
+    depends_on:
+      - db
+    ports:
+      - 80:80
