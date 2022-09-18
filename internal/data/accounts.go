@@ -24,7 +24,8 @@ func ValidateAccount(v *validator.Validator, account *Account) {
 }
 
 type AccountModel struct {
-	DB *sql.DB
+	WriteDb *sql.DB
+	ReadDb  *sql.DB
 }
 
 func (m AccountModel) Insert(account *Account) error {
@@ -33,12 +34,12 @@ func (m AccountModel) Insert(account *Account) error {
         VALUES ($1)
         RETURNING id, version`
 
-	args := []interface{}{account.Id}
+	args := []interface{}{account.BankId}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	return m.DB.QueryRowContext(ctx, query, args...).Scan(&account.Id, &account.Version)
+	return m.WriteDb.QueryRowContext(ctx, query, args...).Scan(&account.Id, &account.Version)
 }
 
 func (m AccountModel) Get(id int64, bankId int64) (*Account, error) {
@@ -56,7 +57,7 @@ func (m AccountModel) Get(id int64, bankId int64) (*Account, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	err := m.DB.QueryRowContext(ctx, query, id, bankId).Scan(
+	err := m.ReadDb.QueryRowContext(ctx, query, id, bankId).Scan(
 		&account.Id,
 		&account.BankId,
 		&account.BalanceInCents,
@@ -80,7 +81,7 @@ func (m AccountModel) Update(account *Account, bankId int64) error {
 	query := `
         UPDATE accounts 
         SET balance_in_cents = $1, frozen = $2, version = version + 1
-        WHERE id = $3 and bank_id = $4 version = $5
+        WHERE id = $3 and bank_id = $4 and version = $5
         RETURNING version`
 
 	args := []interface{}{
@@ -94,7 +95,7 @@ func (m AccountModel) Update(account *Account, bankId int64) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&account.Version)
+	err := m.WriteDb.QueryRowContext(ctx, query, args...).Scan(&account.Version)
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
@@ -119,7 +120,7 @@ func (m AccountModel) Delete(id int64, bankId int64) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	result, err := m.DB.ExecContext(ctx, query, id, bankId)
+	result, err := m.WriteDb.ExecContext(ctx, query, id, bankId)
 	if err != nil {
 		return err
 	}
@@ -149,7 +150,7 @@ func (m AccountModel) GetAll(bankId int64, filters Filters) ([]*Account, Metadat
 
 	args := []interface{}{bankId, filters.limit(), filters.offset()}
 
-	rows, err := m.DB.QueryContext(ctx, query, args...)
+	rows, err := m.ReadDb.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, Metadata{}, err
 	}

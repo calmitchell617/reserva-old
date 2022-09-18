@@ -29,6 +29,8 @@ func (app *application) routes() http.Handler {
 	router.HandlerFunc(http.MethodPatch, "/v1/accounts/:id", app.requireActivatedBank(app.updateAccountHandler))
 	router.HandlerFunc(http.MethodDelete, "/v1/accounts/:id", app.requireActivatedBank(app.deleteAccountHandler))
 
+	router.HandlerFunc(http.MethodPost, "/v1/cards", app.requireActivatedBank(app.createCardHandler))
+
 	router.HandlerFunc(http.MethodPost, "/v1/tokens/authentication", app.createAuthenticationTokenHandler)
 	router.HandlerFunc(http.MethodPost, "/v1/tokens/activation", app.createActivationTokenHandler)
 	router.HandlerFunc(http.MethodPost, "/v1/tokens/reset-password", app.createPasswordResetTokenHandler)

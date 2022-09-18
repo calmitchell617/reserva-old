@@ -1,16 +1,19 @@
 package main
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/calmitchell617/reserva/internal/validator"
+	"github.com/theplant/luhn"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -135,6 +138,22 @@ func (app *application) readInt(qs url.Values, key string, defaultValue int, v *
 	return i
 }
 
+func (app *application) readBool(qs url.Values, key string, defaultValue bool, v *validator.Validator) bool {
+	s := qs.Get(key)
+
+	if s == "" {
+		return defaultValue
+	}
+
+	i, err := strconv.ParseBool(s)
+	if err != nil {
+		v.AddError(key, "must be a boolean value")
+		return defaultValue
+	}
+
+	return i
+}
+
 func (app *application) background(fn func()) {
 	app.wg.Add(1)
 
@@ -150,4 +169,35 @@ func (app *application) background(fn func()) {
 
 		fn()
 	}()
+}
+
+func generateCardNumber() (int64, error) {
+	var cardNumber int64
+	cardString := "29"
+
+	for i := 0; i < 13; i++ {
+		nBig, err := rand.Int(rand.Reader, big.NewInt(10))
+		if err != nil {
+			return cardNumber, err
+		}
+		n := fmt.Sprint(nBig.Int64())
+
+		cardString = cardString + n
+	}
+
+	baseNumber, err := strconv.ParseInt(cardString, 10, 64)
+	if err != nil {
+		return cardNumber, err
+	}
+
+	luhnNumber := luhn.CalculateLuhn(baseNumber)
+
+	cardString = cardString + fmt.Sprint(luhnNumber)
+
+	cardNumber, err = strconv.ParseInt(cardString, 10, 64)
+	if err != nil {
+		return cardNumber, err
+	}
+
+	return cardNumber, err
 }

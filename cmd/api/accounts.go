@@ -156,8 +156,7 @@ func (app *application) deleteAccountHandler(w http.ResponseWriter, r *http.Requ
 
 func (app *application) listAccountsHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Title  string
-		Genres []string
+		Frozen bool
 		data.Filters
 	}
 
@@ -167,11 +166,13 @@ func (app *application) listAccountsHandler(w http.ResponseWriter, r *http.Reque
 
 	qs := r.URL.Query()
 
+	input.Frozen = app.readBool(qs, "frozen", false, v)
+
 	input.Filters.Page = app.readInt(qs, "page", 1, v)
 	input.Filters.PageSize = app.readInt(qs, "page_size", 20, v)
 
 	input.Filters.Sort = app.readString(qs, "sort", "id")
-	input.Filters.SortSafelist = []string{"id", "-id"}
+	input.Filters.SortSafelist = []string{"id", "frozen", "-id", "-frozen"}
 
 	if data.ValidateFilters(v, input.Filters); !v.Valid() {
 		app.failedValidationResponse(w, r, v.Errors)
