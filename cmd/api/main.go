@@ -28,10 +28,18 @@ type config struct {
 	port int
 	env  string
 	db   struct {
-		dsn          string
-		maxOpenConns int
-		maxIdleConns int
-		maxIdleTime  string
+		write struct {
+			dsn          string
+			maxOpenConns int
+			maxIdleConns int
+			maxIdleTime  string
+		}
+		read struct {
+			dsn          string
+			maxOpenConns int
+			maxIdleConns int
+			maxIdleTime  string
+		}
 	}
 	limiter struct {
 		enabled bool
@@ -65,11 +73,15 @@ func main() {
 	flag.IntVar(&cfg.port, "port", 80, "API server port")
 	flag.StringVar(&cfg.env, "env", "development", "Environment (development|staging|production)")
 
-	flag.StringVar(&cfg.db.dsn, "db-dsn", "", "PostgreSQL DSN")
+	flag.StringVar(&cfg.db.write.dsn, "write-db-dsn", "", "PostgreSQL write DSN")
+	flag.IntVar(&cfg.db.write.maxOpenConns, "write-db-max-open-conns", 25, "PostgreSQL write max open connections")
+	flag.IntVar(&cfg.db.write.maxIdleConns, "write-db-max-idle-conns", 25, "PostgreSQL write max idle connections")
+	flag.StringVar(&cfg.db.write.maxIdleTime, "write-db-max-idle-time", "15m", "PostgreSQL write max connection idle time")
 
-	flag.IntVar(&cfg.db.maxOpenConns, "db-max-open-conns", 25, "PostgreSQL max open connections")
-	flag.IntVar(&cfg.db.maxIdleConns, "db-max-idle-conns", 25, "PostgreSQL max idle connections")
-	flag.StringVar(&cfg.db.maxIdleTime, "db-max-idle-time", "15m", "PostgreSQL max connection idle time")
+	flag.StringVar(&cfg.db.read.dsn, "read-db-dsn", "", "PostgreSQL read DSN")
+	flag.IntVar(&cfg.db.read.maxOpenConns, "read-db-max-open-conns", 25, "PostgreSQL read max open connections")
+	flag.IntVar(&cfg.db.read.maxIdleConns, "read-db-max-idle-conns", 25, "PostgreSQL read max idle connections")
+	flag.StringVar(&cfg.db.read.maxIdleTime, "read-db-max-idle-time", "15m", "PostgreSQL read max connection idle time")
 
 	flag.BoolVar(&cfg.limiter.enabled, "limiter-enabled", true, "Enable rate limiter")
 	flag.Float64Var(&cfg.limiter.rps, "limiter-rps", 2, "Rate limiter maximum requests per second")
@@ -95,8 +107,13 @@ func main() {
 		os.Exit(0)
 	}
 
-	if cfg.db.dsn == "" {
-		fmt.Println("You must enter a DSN to start the server")
+	if cfg.db.write.dsn == "" {
+		fmt.Println("You must enter a write node DSN to start the server. It can be the same as the write node.")
+		os.Exit(1)
+	}
+
+	if cfg.db.read.dsn == "" {
+		fmt.Println("You must enter a read node DSN to start the server. It can be the same as the write node.")
 		os.Exit(1)
 	}
 
@@ -124,11 +141,12 @@ func main() {
 
 	logger := jsonlog.New(os.Stdout, jsonlog.LevelInfo)
 
-	db, err := openDB(cfg)
+	writeDb, readDb, err := openDB(cfg)
 	if err != nil {
 		logger.PrintFatal(err, nil)
 	}
-	defer db.Close()
+	defer writeDb.Close()
+	defer readDb.Close()
 
 	logger.PrintInfo("database connection pool established", nil)
 
@@ -138,8 +156,12 @@ func main() {
 		return runtime.NumGoroutine()
 	}))
 
-	expvar.Publish("database", expvar.Func(func() interface{} {
-		return db.Stats()
+	expvar.Publish("write database", expvar.Func(func() interface{} {
+		return writeDb.Stats()
+	}))
+
+	expvar.Publish("read database", expvar.Func(func() interface{} {
+		return readDb.Stats()
 	}))
 
 	expvar.Publish("timestamp", expvar.Func(func() interface{} {
@@ -149,7 +171,7 @@ func main() {
 	app := &application{
 		config: cfg,
 		logger: logger,
-		models: data.NewModels(db),
+		models: data.NewModels(writeDb, readDb),
 		mailer: mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender, cfg.env),
 	}
 
@@ -159,29 +181,44 @@ func main() {
 	}
 }
 
-func openDB(cfg config) (*sql.DB, error) {
-	db, err := sql.Open("postgres", cfg.db.dsn)
+func openDB(cfg config) (*sql.DB, *sql.DB, error) {
+	writeDb, err := sql.Open("postgres", cfg.db.write.dsn)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	db.SetMaxOpenConns(cfg.db.maxOpenConns)
-	db.SetMaxIdleConns(cfg.db.maxIdleConns)
+	writeDb.SetMaxOpenConns(cfg.db.write.maxOpenConns)
+	writeDb.SetMaxIdleConns(cfg.db.write.maxIdleConns)
 
-	duration, err := time.ParseDuration(cfg.db.maxIdleTime)
+	duration, err := time.ParseDuration(cfg.db.write.maxIdleTime)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	db.SetConnMaxIdleTime(duration)
+	writeDb.SetConnMaxIdleTime(duration)
+
+	readDb, err := sql.Open("postgres", cfg.db.read.dsn)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	readDb.SetMaxOpenConns(cfg.db.read.maxOpenConns)
+	readDb.SetMaxIdleConns(cfg.db.read.maxIdleConns)
+
+	readDb.SetConnMaxIdleTime(duration)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err = db.PingContext(ctx)
+	err = writeDb.PingContext(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return db, nil
+	err = readDb.PingContext(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return writeDb, readDb, nil
 }

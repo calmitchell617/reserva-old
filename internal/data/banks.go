@@ -9,8 +9,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/calmitchell617/reserva/internal/validator"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -27,42 +25,11 @@ type Bank struct {
 	BalanceInCents int64    `json:"balance_in_cents"`
 	Activated      bool     `json:"activated"`
 	Frozen         bool     `json:"frozen"`
-	Version        int      `json:"-"`
+	Version        int64    `json:"-"`
 }
 
 func (u *Bank) IsAnonymous() bool {
 	return u == AnonymousBank
-}
-
-type password struct {
-	plaintext *string
-	hash      []byte
-}
-
-func (p *password) Set(plaintextPassword string) error {
-	hash, err := bcrypt.GenerateFromPassword([]byte(plaintextPassword), 12)
-	if err != nil {
-		return err
-	}
-
-	p.plaintext = &plaintextPassword
-	p.hash = hash
-
-	return nil
-}
-
-func (p *password) Matches(plaintextPassword string) (bool, error) {
-	err := bcrypt.CompareHashAndPassword(p.hash, []byte(plaintextPassword))
-	if err != nil {
-		switch {
-		case errors.Is(err, bcrypt.ErrMismatchedHashAndPassword):
-			return false, nil
-		default:
-			return false, err
-		}
-	}
-
-	return true, nil
 }
 
 func ValidateEmail(v *validator.Validator, email string) {
@@ -92,7 +59,8 @@ func ValidateBank(v *validator.Validator, bank *Bank) {
 }
 
 type BankModel struct {
-	DB *sql.DB
+	WriteDb *sql.DB
+	ReadDb  *sql.DB
 }
 
 func (m BankModel) Insert(bank *Bank) error {
@@ -106,7 +74,7 @@ func (m BankModel) Insert(bank *Bank) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&bank.Id, &bank.Version)
+	err := m.WriteDb.QueryRowContext(ctx, query, args...).Scan(&bank.Id, &bank.Version)
 	if err != nil {
 		switch {
 		case err.Error() == `pq: duplicate key value violates unique constraint "banks_email_key"`:
@@ -138,7 +106,7 @@ func (m BankModel) GetByEmail(email string) (*Bank, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	err := m.DB.QueryRowContext(ctx, query, email).Scan(
+	err := m.ReadDb.QueryRowContext(ctx, query, email).Scan(
 		&bank.Id,
 		&bank.Name,
 		&bank.Email,
@@ -189,7 +157,7 @@ func (m BankModel) Update(bank *Bank) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&bank.Version)
+	err := m.WriteDb.QueryRowContext(ctx, query, args...).Scan(&bank.Version)
 	if err != nil {
 		switch {
 		case err.Error() == `pq: duplicate key value violates unique constraint "banks_email_key"`:
@@ -231,7 +199,7 @@ func (m BankModel) GetForToken(tokenScope, tokenPlaintext string) (*Bank, error)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	err := m.DB.QueryRowContext(ctx, query, args...).Scan(
+	err := m.ReadDb.QueryRowContext(ctx, query, args...).Scan(
 		&bank.Id,
 		&bank.Name,
 		&bank.Email,

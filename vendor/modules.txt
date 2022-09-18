@@ -12,6 +12,9 @@ github.com/julienschmidt/httprouter
 github.com/lib/pq
 github.com/lib/pq/oid
 github.com/lib/pq/scram
+# github.com/theplant/luhn v0.0.0-20170224032821-81a1a381387a
+## explicit
+github.com/theplant/luhn
 # github.com/tomasen/realip v0.0.0-20180522021738-f0c99a92ddce
 ## explicit
 github.com/tomasen/realip

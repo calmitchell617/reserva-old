@@ -19,8 +19,17 @@ func (app *application) routes() http.Handler {
 	if app.config.env == "development" {
 		router.HandlerFunc(http.MethodPost, "/v1/banks", app.registerBankHandler)
 	}
+	router.HandlerFunc(http.MethodGet, "/v1/banks", app.requireActivatedBank(app.showBankHandler))
 	router.HandlerFunc(http.MethodPut, "/v1/banks/activate", app.activateBankHandler)
 	router.HandlerFunc(http.MethodPut, "/v1/banks/update-password", app.updateBankPasswordHandler)
+
+	router.HandlerFunc(http.MethodGet, "/v1/accounts", app.requireActivatedBank(app.listAccountsHandler))
+	router.HandlerFunc(http.MethodPost, "/v1/accounts", app.requireActivatedBank(app.createAccountHandler))
+	router.HandlerFunc(http.MethodGet, "/v1/accounts/:id", app.requireActivatedBank(app.showAccountHandler))
+	router.HandlerFunc(http.MethodPatch, "/v1/accounts/:id", app.requireActivatedBank(app.updateAccountHandler))
+	router.HandlerFunc(http.MethodDelete, "/v1/accounts/:id", app.requireActivatedBank(app.deleteAccountHandler))
+
+	router.HandlerFunc(http.MethodPost, "/v1/cards", app.requireActivatedBank(app.createCardHandler))
 
 	router.HandlerFunc(http.MethodPost, "/v1/tokens/authentication", app.createAuthenticationTokenHandler)
 	router.HandlerFunc(http.MethodPost, "/v1/tokens/activation", app.createActivationTokenHandler)

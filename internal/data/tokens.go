@@ -53,7 +53,8 @@ func ValidateTokenPlaintext(v *validator.Validator, tokenPlaintext string) {
 }
 
 type TokenModel struct {
-	DB *sql.DB
+	WriteDb *sql.DB
+	ReadDb  *sql.DB
 }
 
 func (m TokenModel) New(bankID int64, ttl time.Duration, scope string) (*Token, error) {
@@ -76,7 +77,7 @@ func (m TokenModel) Insert(token *Token) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	_, err := m.DB.ExecContext(ctx, query, args...)
+	_, err := m.WriteDb.ExecContext(ctx, query, args...)
 	return err
 }
 
@@ -88,6 +89,6 @@ func (m TokenModel) DeleteAllForBank(scope string, bankID int64) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	_, err := m.DB.ExecContext(ctx, query, scope, bankID)
+	_, err := m.WriteDb.ExecContext(ctx, query, scope, bankID)
 	return err
 }

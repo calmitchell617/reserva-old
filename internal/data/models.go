@@ -11,13 +11,17 @@ var (
 )
 
 type Models struct {
-	Tokens TokenModel
-	Banks  BankModel
+	Tokens   TokenModel
+	Banks    BankModel
+	Accounts AccountModel
+	Cards    CardModel
 }
 
-func NewModels(db *sql.DB) Models {
+func NewModels(writeDb *sql.DB, readDb *sql.DB) Models {
 	return Models{
-		Tokens: TokenModel{DB: db},
-		Banks:  BankModel{DB: db},
+		Tokens:   TokenModel{WriteDb: writeDb, ReadDb: readDb},
+		Banks:    BankModel{WriteDb: writeDb, ReadDb: readDb},
+		Accounts: AccountModel{WriteDb: writeDb, ReadDb: readDb},
+		Cards:    CardModel{WriteDb: writeDb, ReadDb: readDb},
 	}
 }
