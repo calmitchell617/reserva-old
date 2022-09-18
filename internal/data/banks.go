@@ -27,7 +27,7 @@ type Bank struct {
 	BalanceInCents int64    `json:"balance_in_cents"`
 	Activated      bool     `json:"activated"`
 	Frozen         bool     `json:"frozen"`
-	Version        int      `json:"-"`
+	Version        int64    `json:"-"`
 }
 
 func (u *Bank) IsAnonymous() bool {
