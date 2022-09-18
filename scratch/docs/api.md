@@ -80,46 +80,6 @@ All routes require bearer token authentication unless otherwise noted.
   }
   ```
 
-## Depositors
----
-
-### `/v1/depositors`
-- `GET`
-  - Gets a depositor's details.
-  ### ***Request***
-  `GET` with `?id=<number>` query parameter
-  ### ***Response***
-  ```
-  {
-    "id": <number>,
-    "external_id": <string>,
-    "name": <string>,
-    "address": <string>,
-    "date_of_birth": <string...YYYY-MM-DD>
-  }
-  ```
-- `POST`
-  - Creates a depositor.
-  ### ***Request***
-  ```
-  {
-    "external_id": <string>,
-    "name": <string>,
-    "address": <string>,
-    "date_of_birth": <string... YYYY-MM-DD>
-  }
-  ```
-  ### ***Response***
-  ```
-  {
-    "id": <number>,
-    "external_id": <string>,
-    "name": <string>,
-    "address": <string>,
-    "date_of_birth": <string...YYYY-MM-DD>
-  }
-  ```
-
 ## Accounts
 
 ### `/v1/accounts`

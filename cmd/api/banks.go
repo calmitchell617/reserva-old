@@ -9,6 +9,26 @@ import (
 	"github.com/calmitchell617/reserva/internal/validator"
 )
 
+func (app *application) showBankHandler(w http.ResponseWriter, r *http.Request) {
+	requestingBank := app.contextGetBank(r)
+
+	bank, err := app.models.Banks.GetByEmail(requestingBank.Email)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"bank": bank}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
 func (app *application) registerBankHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Name     string `json:"name"`

@@ -19,6 +19,8 @@ func (app *application) routes() http.Handler {
 	if app.config.env == "development" {
 		router.HandlerFunc(http.MethodPost, "/v1/banks", app.registerBankHandler)
 	}
+	router.HandlerFunc(http.MethodGet, "/v1/banks", app.requireActivatedBank(app.showBankHandler))
+
 	router.HandlerFunc(http.MethodPut, "/v1/banks/activate", app.activateBankHandler)
 	router.HandlerFunc(http.MethodPut, "/v1/banks/update-password", app.updateBankPasswordHandler)
 
