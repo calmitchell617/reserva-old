@@ -58,11 +58,15 @@ func (app *application) createCardHandler(w http.ResponseWriter, r *http.Request
 		app.serverErrorResponse(w, r, err)
 	}
 
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 5; i++ {
 		err = app.models.Cards.Insert(card, requestingBank.Id)
 		if err != nil {
 			switch {
 			case errors.Is(err, data.ErrDuplicateCardId):
+				if i == 4 {
+					app.serverErrorResponse(w, r, errors.New("couldn't generate a unique card number"))
+					return
+				}
 				continue
 			default:
 				app.serverErrorResponse(w, r, err)
