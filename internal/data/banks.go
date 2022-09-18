@@ -20,16 +20,14 @@ var (
 var AnonymousBank = &Bank{}
 
 type Bank struct {
-	Id             int64     `json:"id"`
-	CreatedAt      time.Time `json:"created_at"`
-	Name           string    `json:"name"`
-	Email          string    `json:"email"`
-	Password       password  `json:"-"`
-	Activated      bool      `json:"activated"`
-	Version        int       `json:"-"`
-	ExternalId     string    `json:"external_id"`
-	BalanceInCents int64     `json:"balance_in_cents"`
-	Frozen         bool      `json:"frozen"`
+	Id             int64    `json:"id"`
+	Name           string   `json:"name"`
+	Email          string   `json:"email"`
+	Password       password `json:"-"`
+	BalanceInCents int64    `json:"balance_in_cents"`
+	Activated      bool     `json:"activated"`
+	Frozen         bool     `json:"frozen"`
+	Version        int      `json:"-"`
 }
 
 func (u *Bank) IsAnonymous() bool {
@@ -81,7 +79,6 @@ func ValidatePasswordPlaintext(v *validator.Validator, password string) {
 func ValidateBank(v *validator.Validator, bank *Bank) {
 	v.Check(bank.Name != "", "name", "must be provided")
 	v.Check(utf8.RuneCountInString(bank.Name) <= 500, "name", "must not be more than 500 characters long")
-	v.Check(bank.ExternalId != "", "external_id", "must be provided")
 
 	ValidateEmail(v, bank.Email)
 
@@ -98,19 +95,41 @@ type BankModel struct {
 	DB *sql.DB
 }
 
+func (m BankModel) Insert(bank *Bank) error {
+	query := `
+        INSERT INTO banks (name, email, password_hash) 
+        VALUES ($1, $2, $3)
+        RETURNING id, version`
+
+	args := []interface{}{bank.Name, bank.Email, bank.Password.hash}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&bank.Id, &bank.Version)
+	if err != nil {
+		switch {
+		case err.Error() == `pq: duplicate key value violates unique constraint "banks_email_key"`:
+			return ErrDuplicateEmail
+		default:
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (m BankModel) GetByEmail(email string) (*Bank, error) {
 	query := `
         SELECT
 					id,
-					created_at,
 					name,
 					email,
 					password_hash,
-					activated,
-					version,
-					external_id,
 					balance_in_cents,
-					frozen
+					activated,
+					frozen,
+					version
         FROM banks
         WHERE email = $1`
 
@@ -121,15 +140,13 @@ func (m BankModel) GetByEmail(email string) (*Bank, error) {
 
 	err := m.DB.QueryRowContext(ctx, query, email).Scan(
 		&bank.Id,
-		&bank.CreatedAt,
 		&bank.Name,
 		&bank.Email,
 		&bank.Password.hash,
-		&bank.Activated,
-		&bank.Version,
-		&bank.ExternalId,
 		&bank.BalanceInCents,
+		&bank.Activated,
 		&bank.Frozen,
+		&bank.Version,
 	)
 
 	if err != nil {
@@ -151,21 +168,19 @@ func (m BankModel) Update(bank *Bank) error {
 					name = $1,
 					email = $2,
 					password_hash = $3,
-					activated = $4,
-					version = version + 1,
-					external_id = $5,
-					balance_in_cents = $6,
-					frozen = $7
-        WHERE id = $8 AND version = $9
+					balance_in_cents = $4,
+					activated = $5,
+					frozen = $6,
+					version = version + 1
+        WHERE id = $7 AND version = $8
         RETURNING version`
 
 	args := []interface{}{
 		bank.Name,
 		bank.Email,
 		bank.Password.hash,
-		bank.Activated,
-		bank.ExternalId,
 		bank.BalanceInCents,
+		bank.Activated,
 		bank.Frozen,
 		bank.Id,
 		bank.Version,
@@ -195,15 +210,13 @@ func (m BankModel) GetForToken(tokenScope, tokenPlaintext string) (*Bank, error)
 	query := `
         SELECT 
 					banks.id,
-					banks.created_at,
 					banks.name,
 					banks.email,
 					banks.password_hash,
-					banks.activated,
-					banks.version,
-					banks.external_id,
 					banks.balance_in_cents,
-					banks.frozen
+					banks.activated,
+					banks.frozen,
+					banks.version
         FROM banks
         INNER JOIN tokens
         ON banks.id = tokens.bank_id
@@ -220,15 +233,13 @@ func (m BankModel) GetForToken(tokenScope, tokenPlaintext string) (*Bank, error)
 
 	err := m.DB.QueryRowContext(ctx, query, args...).Scan(
 		&bank.Id,
-		&bank.CreatedAt,
 		&bank.Name,
 		&bank.Email,
 		&bank.Password.hash,
-		&bank.Activated,
-		&bank.Version,
-		&bank.ExternalId,
 		&bank.BalanceInCents,
+		&bank.Activated,
 		&bank.Frozen,
+		&bank.Version,
 	)
 	if err != nil {
 		switch {

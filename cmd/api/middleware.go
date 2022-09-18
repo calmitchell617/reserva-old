@@ -157,27 +157,6 @@ func (app *application) requireActivatedBank(next http.HandlerFunc) http.Handler
 	return app.requireAuthenticatedBank(fn)
 }
 
-func (app *application) requirePermission(code string, next http.HandlerFunc) http.HandlerFunc {
-	fn := func(w http.ResponseWriter, r *http.Request) {
-		bank := app.contextGetBank(r)
-
-		permissions, err := app.models.Permissions.GetAllForBank(bank.Id)
-		if err != nil {
-			app.serverErrorResponse(w, r, err)
-			return
-		}
-
-		if !permissions.Include(code) {
-			app.notPermittedResponse(w, r)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	}
-
-	return app.requireActivatedBank(fn)
-}
-
 func (app *application) enableCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Vary", "Origin")

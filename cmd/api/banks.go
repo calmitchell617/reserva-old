@@ -3,10 +3,79 @@ package main
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/calmitchell617/reserva/internal/data"
 	"github.com/calmitchell617/reserva/internal/validator"
 )
+
+func (app *application) registerBankHandler(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Name     string `json:"name"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	err := app.readJSON(w, r, &input)
+	if err != nil {
+		app.badRequestResponse(w, r, err)
+		return
+	}
+
+	bank := &data.Bank{
+		Name:      input.Name,
+		Email:     input.Email,
+		Activated: false,
+	}
+
+	err = bank.Password.Set(input.Password)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	v := validator.New()
+
+	if data.ValidateBank(v, bank); !v.Valid() {
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	err = app.models.Banks.Insert(bank)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrDuplicateEmail):
+			v.AddError("email", "a bank with this email address already exists")
+			app.failedValidationResponse(w, r, v.Errors)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	token, err := app.models.Tokens.New(bank.Id, 3*24*time.Hour, data.ScopeActivation)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	app.background(func() {
+		data := map[string]interface{}{
+			"activationToken": token.Plaintext,
+			"bankID":          bank.Id,
+		}
+
+		err = app.mailer.Send(bank.Email, "bank_welcome.tmpl", data)
+		if err != nil {
+			app.logger.PrintError(err, nil)
+		}
+	})
+
+	err = app.writeJSON(w, http.StatusAccepted, envelope{"bank": bank}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
 
 func (app *application) activateBankHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
